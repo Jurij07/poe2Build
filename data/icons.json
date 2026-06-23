@@ -1,0 +1,35 @@
+{
+  "_comment": "Curated, verified PoE2 art paths (poe2db CDN). Used by lib/images.ts as a fast/offline override before the live resolver. Paths are relative to https://cdn.poe2db.tw/image/ and get a .webp suffix.",
+  "gems": {
+    "Lightning Arrow": "Art/2DItems/Gems/New/LightningArrowSkillGem",
+    "Snipe": "Art/2DItems/Gems/New/RangerSnipeSkillGem",
+    "Sniper's Mark": "Art/2DItems/Gems/New/SnipersMarkSkillGem",
+    "Herald of Thunder": "Art/2DItems/Gems/New/HeraldofThunderSkillGem",
+    "Herald of Ice": "Art/2DItems/Gems/New/HeraldofIceSkillGem",
+    "Wind Dancer": "Art/2DItems/Gems/New/WindDancerSkillGem",
+    "Blink": "Art/2DItems/Gems/New/BlinkReservationSkillGem",
+    "Tempest Flurry": "Art/2DItems/Gems/New/TempestFlurrySkillGem",
+    "Lightning Penetration": "Art/2DItems/Gems/New/NewSupport/LightningPenetrationSupportGem",
+    "Lightning Penetration Support": "Art/2DItems/Gems/New/NewSupport/LightningPenetrationSupportGem",
+    "Fork": "Art/2DItems/Gems/New/NewSupport/ForkSupportGem",
+    "Fork Support": "Art/2DItems/Gems/New/NewSupport/ForkSupportGem",
+    "Innervate": "Art/2DItems/Gems/New/NewSupport/InnervateSupportGem",
+    "Premeditation": "Art/2DItems/Gems/New/NewSupport/EmpoweredDamageSupportGem",
+    "Mobility": "Art/2DItems/Gems/New/NewSupport/MobilitySupportGem",
+    "Heightened Curse": "Art/2DItems/Gems/New/NewSupport/CurseEffectSupportGem"
+  },
+  "items": {
+    "Dualstring Bow": "Art/2DItems/Weapons/TwoHandWeapons/Bows/Basetypes/Bow06",
+    "Gemini Bow": "Art/2DItems/Weapons/TwoHandWeapons/Bows/Basetypes/Bow06",
+    "Visceral Quiver": "Art/2DItems/Quivers/Basetypes/QuiverVisceral",
+    "Gold Amulet": "Art/2DItems/Amulets/Basetypes/GoldAmulet",
+    "Sapphire Ring": "Art/2DItems/Rings/Basetypes/SapphireRing",
+    "Heavy Belt": "Art/2DItems/Belts/Basetypes/Belt09",
+    "Quilted Vest": "Art/2DItems/Armours/BodyArmours/Basetypes/BodyDex02",
+    "Furtive Wraps": "Art/2DItems/Armours/Gloves/Basetypes/GlovesDexInt01",
+    "Wanderlust": "Art/2DItems/Armours/Boots/Uniques/Wanderlust",
+    "Goldrim": "Art/2DItems/Armours/Helmets/Uniques/Goldrim",
+    "Blackgleam": "Art/2DItems/Quivers/Uniques/Blackgleam",
+    "The Three Dragons": "Art/2DItems/Armours/Helmets/Uniques/TheThreeDragons"
+  }
+}
