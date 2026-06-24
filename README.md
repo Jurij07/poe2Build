@@ -61,7 +61,10 @@ PoB code ──► /api/build ──► decode (lib/pob) ──► analysis + le
 ## Data sources
 
 - **Passive tree**: [Path of Building (PoE2 fork)](https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2)
-  `TreeData/0_3/tree.json` — slimmed and position-precomputed by `scripts/prepare_tree.py`.
+  `TreeData/0_5/tree.json` (patch 0.5.x — Runes of Aldur) — slimmed and
+  position-precomputed by `scripts/prepare_tree.py`. The tree version must track
+  the live game, otherwise pasted builds (version-specific node ids) render as
+  disconnected nodes.
 - **Item / gem / node art**: [poe2db.tw](https://poe2db.tw) CDN.
 
 Not affiliated with Grinding Gear Games.
