@@ -52,6 +52,18 @@ def main():
     orbit_radii = C["orbitRadii"]
     angles_by_orbit = C["orbitAnglesByOrbit"]
 
+    # IMPORTANT: a node's `group` field is NOT a direct index into `groups`
+    # (in the 0.5 data it is off by one). Build the authoritative node -> group
+    # mapping from each group's own `nodes` list instead, so every node is
+    # positioned at the true centre of the group that actually contains it.
+    # Getting this wrong shifts ~a quarter of nodes to a neighbouring group and
+    # makes connected nodes render far apart (long crossing lines).
+    node2group = {}
+    for gi, g in enumerate(groups):
+        if isinstance(g, dict):
+            for member in g.get("nodes", []):
+                node2group[str(member)] = gi
+
     def angle_for(orbit, idx):
         arr = (
             angles_by_orbit[str(orbit)]
@@ -60,8 +72,8 @@ def main():
         )
         return arr[idx % len(arr)] if arr else 0.0
 
-    def pos(n):
-        gi = n.get("group")
+    def pos(nid, n):
+        gi = node2group.get(str(nid))
         if gi is None or gi >= len(groups) or not groups[gi]:
             return None
         g = groups[gi]
@@ -80,7 +92,7 @@ def main():
     for nid, n in nodes.items():
         if not isinstance(n, dict) or nid == "root":
             continue
-        p = pos(n)
+        p = pos(nid, n)
         conns = [c["id"] if isinstance(c, dict) else c for c in n.get("connections", [])]
         adj[str(nid)] = [str(c) for c in conns]
 

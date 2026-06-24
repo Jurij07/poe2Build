@@ -526,9 +526,14 @@ function endgameItems(build: DecodedBuild): { items: ItemRec[]; itemNote: string
     "Ring 2",
     "Belt",
   ];
+  // Main gear first (weapons, armour, jewellery); flasks/charms/other slots last.
+  const rank = (slot?: string) => {
+    const i = order.indexOf(slot ?? "");
+    return i === -1 ? order.length : i;
+  };
   const items = build.items
     .filter((it) => it.slot)
-    .sort((a, b) => order.indexOf(a.slot!) - order.indexOf(b.slot!))
+    .sort((a, b) => rank(a.slot) - rank(b.slot))
     .map<ItemRec>((it) => ({
       slot: it.slot!,
       name: it.name,
@@ -560,6 +565,7 @@ function endgameItems(build: DecodedBuild): { items: ItemRec[]; itemNote: string
 function mainGroup(build: DecodedBuild) {
   const idx = (build.mainSocketGroup ?? 1) - 1;
   return (
+    build.skillGroups.find((g) => g.isMain && g.gems.some((x) => !x.isSupport)) ??
     build.skillGroups[idx] ??
     build.skillGroups.find((g) => g.gems.some((x) => !x.isSupport)) ??
     build.skillGroups[0]
@@ -644,10 +650,18 @@ export function generateLeveling(build: DecodedBuild): {
   const arch = detectArchetypes(build);
   const mg = mainGroup(build);
   const mainSkill = mg?.mainActive ?? mg?.gems.find((g) => !g.isSupport)?.name;
-  const supports = mg?.gems.filter((g) => g.isSupport).map((g) => g.name) ?? [];
-  const secondaryActives = build.skillGroups
-    .filter((g) => g !== mg)
-    .flatMap((g) => g.gems.filter((x) => !x.isSupport).map((x) => x.name));
+  const supports = [
+    ...new Set(mg?.gems.filter((g) => g.isSupport).map((g) => g.name) ?? []),
+  ];
+  // Other groups' active skills (auras/heralds/movement/utility), de-duplicated
+  // and excluding the main skill so the plan doesn't repeat it.
+  const secondaryActives = [
+    ...new Set(
+      build.skillGroups
+        .filter((g) => g !== mg)
+        .flatMap((g) => g.gems.filter((x) => !x.isSupport).map((x) => x.name))
+    ),
+  ].filter((n) => n && n !== mainSkill);
 
   // Active milestones up to the build's final level.
   const stagesM = MILESTONES.filter(
@@ -690,16 +704,23 @@ export function generateLeveling(build: DecodedBuild): {
       const carried = [...usedUniques].filter(
         (n) => !newUniques.some((u) => u.name === n)
       );
-      items = [
-        ...newUniques.map((u) => uniqueRec(u)),
-        ...campaignRares(i, dmg, arch, build),
-      ];
+      // Early on the leveling uniques are the best slots; from mid-campaign,
+      // well-rolled rares overtake them — so lead with whichever is actually best.
+      const rares = campaignRares(i, dmg, arch, build);
+      items = i <= 1
+        ? [...newUniques.map((u) => uniqueRec(u)), ...rares]
+        : [...rares, ...newUniques.map((u) => uniqueRec(u))];
+      const dlow = dmg === "your main" ? "" : dmg.toLowerCase() + " ";
+      const transition =
+        i <= 1
+          ? "Leveling uniques are your strongest slots right now — equip each as soon as you meet its level requirement."
+          : `By now a well-rolled rare (high Life + two resistances + flat ${dlow}damage) beats the leveling uniques — replace each unique the moment a better rare drops, and craft rares as your real best-in-slot.`;
       itemNote =
         (newUniques.length
           ? `New this stage: ${newUniques.map((u) => u.name).join(", ")}. `
           : "") +
-        (carried.length ? `Still wearing: ${carried.join(", ")}. ` : "") +
-        "Pick the best example item you can actually equip at your level — don't hold a slot empty waiting for a perfect drop.";
+        (carried.length ? `Carrying over: ${carried.join(", ")}. ` : "") +
+        transition;
     }
 
     return {

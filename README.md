@@ -64,8 +64,16 @@ PoB code ──► /api/build ──► decode (lib/pob) ──► analysis + le
   `TreeData/0_5/tree.json` (patch 0.5.x — Runes of Aldur) — slimmed and
   position-precomputed by `scripts/prepare_tree.py`. The tree version must track
   the live game, otherwise pasted builds (version-specific node ids) render as
-  disconnected nodes.
+  disconnected nodes. Node positions are taken from the group that actually
+  *contains* each node (`groups[].nodes`), not the node's own `group` field,
+  which is off by one in the source data.
+- **Gem data**: `data/gems.json` (active vs support gem names, distilled from
+  the PoB fork's `Data/Gems.lua`) — PoE2 support gems aren't named "… Support",
+  so the decoder also keys off the export's `skillId`/`gemId` (`Support…`).
 - **Item / gem / node art**: [poe2db.tw](https://poe2db.tw) CDN.
+
+PoB (PoE2) export codes use a `<PathOfBuilding2>` root element — the decoder
+accepts both that and the PoE1 `<PathOfBuilding>` root.
 
 Not affiliated with Grinding Gear Games.
 

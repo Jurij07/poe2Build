@@ -8,6 +8,15 @@ import type {
   TreeSpec,
 } from "./types";
 import { parseItemText } from "./items";
+import gemsData from "@/data/gems.json";
+
+// PoE2 support gems are NOT named "... Support" (e.g. "Fork", "Martial Tempo",
+// "Fire Attunement") and the PoB export carries no support="true" flag — supports
+// are identified by their skillId/variantId/gemId ("Support…" / ".../SupportGem…").
+// This bundled name set (from PoB's Gems.lua) is a fallback for those signals.
+const SUPPORT_GEM_NAMES = new Set<string>(
+  (gemsData as { supportNames?: string[] }).supportNames ?? []
+);
 
 /**
  * A Path of Building export code is URL-safe base64 of a zlib-compressed XML
@@ -58,8 +67,21 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-const isSupportName = (name: string) =>
-  /\bsupport\b/i.test(name) || /Support$/i.test(name.trim());
+/** Strip a trailing tier suffix ("Rapid Attacks I" -> "Rapid Attacks"). */
+const baseGemName = (name: string) => name.replace(/\s+[IVX]+$/, "").trim();
+
+/** Robustly decide if a <Gem> is a support, across real PoB2 and synthetic codes. */
+function detectSupport(g: any, name: string): boolean {
+  const ids = `${g["@_skillId"] ?? ""} ${g["@_variantId"] ?? ""} ${g["@_gemId"] ?? ""}`;
+  // Authoritative in real PoB2 exports.
+  if (/support/i.test(ids)) return true;
+  // Legacy / synthetic explicit flags.
+  if (g["@_support"] === "true" || g["@_isSupport"] === "true") return true;
+  // Bundled name set from PoB's gem data (handles names without "Support").
+  if (SUPPORT_GEM_NAMES.has(name) || SUPPORT_GEM_NAMES.has(baseGemName(name))) return true;
+  // Last resort: literal "Support" in the display name.
+  return /\bsupport\b/i.test(name) || /Support$/i.test(name.trim());
+}
 
 /** Parse the allocated passive nodes out of a <Tree> spec. */
 function parseTree(treeEl: any): TreeSpec {
@@ -110,15 +132,20 @@ function decodeTreeUrl(url: string): number[] {
   return nodes;
 }
 
-function parseSkills(root: any): { groups: SkillGroup[]; mainGroup: number } {
+function parseSkills(root: any): { groups: SkillGroup[]; mainSocketGroup: number } {
   const skillsEl = root.Skills ?? {};
-  // Newer PoB wraps groups in a <SkillSet>; older lists <Skill> directly.
-  const activeSet = arr<any>(skillsEl.SkillSet)[0];
+  // PoB wraps groups in <SkillSet>; pick the *active* set (older codes list
+  // <Skill> directly under <Skills>).
+  const sets = arr<any>(skillsEl.SkillSet);
+  const activeSetId = skillsEl["@_activeSkillSet"];
+  const activeSet =
+    sets.find((s) => String(s["@_id"]) === String(activeSetId)) ?? sets[0];
   const skillContainer = activeSet ?? skillsEl;
   const skillEls = arr<any>(skillContainer.Skill);
-  const mainGroup = num(skillsEl["@_activeSkillSet"] ?? root.Build?.["@_mainSocketGroup"], 1);
+  // mainSocketGroup is a 1-based index into the FULL group list (incl. dividers).
+  const mainSocketGroupRaw = num(root.Build?.["@_mainSocketGroup"], 1);
 
-  const groups: SkillGroup[] = skillEls.map((sk: any, idx: number) => {
+  const all: SkillGroup[] = skillEls.map((sk: any) => {
     const gems: Gem[] = arr<any>(sk.Gem).map((g: any) => {
       const name: string =
         g["@_nameSpec"] || g["@_name"] || g["@_skillId"] || "Unknown Gem";
@@ -128,10 +155,7 @@ function parseSkills(root: any): { groups: SkillGroup[]; mainGroup: number } {
         level: num(g["@_level"], 1),
         quality: num(g["@_quality"], 0),
         enabled: g["@_enabled"] !== "false" && g["@_enabled"] !== "nil",
-        isSupport:
-          g["@_support"] === "true" ||
-          g["@_isSupport"] === "true" ||
-          isSupportName(name),
+        isSupport: detectSupport(g, name),
       };
     });
     // Active skill = the non-support gem the group's mainActiveSkill points at.
@@ -142,12 +166,24 @@ function parseSkills(root: any): { groups: SkillGroup[]; mainGroup: number } {
       slot: sk["@_slot"] || undefined,
       label: sk["@_label"] || undefined,
       enabled: sk["@_enabled"] !== "false",
-      isMain: idx + 1 === num(root.Build?.["@_mainSocketGroup"], 0),
+      isMain: false,
       mainActive,
       gems,
     };
   });
-  return { groups, mainGroup };
+
+  // Resolve the main socket group, skipping empty label-only dividers
+  // ("-- Main Skills", "-- Auras", …) that real PoB builds use to organise gems.
+  let mainObj: SkillGroup | undefined = all[mainSocketGroupRaw - 1];
+  if (!mainObj || !mainObj.gems.some((x) => !x.isSupport)) {
+    mainObj = all.find((g) => g.gems.some((x) => !x.isSupport));
+  }
+  if (mainObj) mainObj.isMain = true;
+
+  // Drop the divider/empty groups from the displayed list and re-index main.
+  const groups = all.filter((g) => g.gems.length > 0);
+  const mainSocketGroup = mainObj ? Math.max(1, groups.indexOf(mainObj) + 1) : 1;
+  return { groups, mainSocketGroup };
 }
 
 function parseItems(root: any) {
@@ -196,7 +232,9 @@ export function decodeBuild(code: string): DecodedBuild {
     parseAttributeValue: false,
   });
   const doc = parser.parse(xml);
-  const root = doc.PathOfBuilding ?? doc;
+  // PoE2's Path of Building exports use a <PathOfBuilding2> root element; the
+  // PoE1 fork uses <PathOfBuilding>. Accept either (and fall back to the doc root).
+  const root = doc.PathOfBuilding2 ?? doc.PathOfBuilding ?? doc;
   const build = root.Build ?? {};
 
   const stats: BuildStat[] = arr<any>(build.PlayerStat).map((s: any) => ({
@@ -204,7 +242,7 @@ export function decodeBuild(code: string): DecodedBuild {
     value: num(s["@_value"]),
   }));
 
-  const { groups } = parseSkills(root);
+  const { groups, mainSocketGroup } = parseSkills(root);
   const { items, itemSlots } = parseItems(root);
   const tree = parseTree(root.Tree);
 
@@ -223,7 +261,7 @@ export function decodeBuild(code: string): DecodedBuild {
       build["@_ascendClassName"] && build["@_ascendClassName"] !== "None"
         ? build["@_ascendClassName"]
         : undefined,
-    mainSocketGroup: num(build["@_mainSocketGroup"], 1),
+    mainSocketGroup,
     stats,
     notes,
     tree,
