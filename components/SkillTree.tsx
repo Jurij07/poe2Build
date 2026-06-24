@@ -131,8 +131,14 @@ export default function SkillTree({ allocated }: { allocated: number[] }) {
     const { zoom } = view.current;
 
     // --- connections ---
-    ctx.lineWidth = 1;
+    // Two passes so the allocated (gold) path renders on top of the faint
+    // background tree, the way Mobalytics shows it. Allocated edges collected
+    // first, drawn last with a soft glow.
     const drawn = new Set<string>();
+    const allocEdges: [number, number, number, number][] = [];
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(78,78,104,0.28)";
+    ctx.beginPath();
     for (const [id, n] of Object.entries(nodes)) {
       if (n.x == null || n.asc) continue;
       for (const cId of n.c) {
@@ -141,16 +147,30 @@ export default function SkillTree({ allocated }: { allocated: number[] }) {
         const key = id < cId ? id + cId : cId + id;
         if (drawn.has(key)) continue;
         drawn.add(key);
-        const both = alloc.current.has(id) && alloc.current.has(cId);
         const [ax, ay] = toScreen(n.x, n.y!, cw, ch);
         const [bx, by] = toScreen(m.x, m.y!, cw, ch);
-        ctx.strokeStyle = both ? "rgba(201,162,39,0.85)" : "rgba(70,70,90,0.25)";
-        ctx.lineWidth = both ? 2.2 : 1;
-        ctx.beginPath();
+        if (alloc.current.has(id) && alloc.current.has(cId)) {
+          allocEdges.push([ax, ay, bx, by]);
+        } else {
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+        }
+      }
+    }
+    ctx.stroke(); // all faint background edges in one path (fast)
+
+    if (allocEdges.length) {
+      ctx.strokeStyle = "rgba(214,176,58,0.95)";
+      ctx.lineWidth = 2.6;
+      ctx.shadowColor = "rgba(201,162,39,0.55)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (const [ax, ay, bx, by] of allocEdges) {
         ctx.moveTo(ax, ay);
         ctx.lineTo(bx, by);
-        ctx.stroke();
       }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
     }
 
     // --- nodes ---

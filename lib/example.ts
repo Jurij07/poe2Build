@@ -3,10 +3,11 @@ import alloc from "@/data/example_alloc.json";
 
 /**
  * A self-contained demo build: a Ranger / Deadeye Lightning Arrow bowzer.
- * Everything here is real PoE2 0.3 data — the 95 allocated passive nodes come
- * straight from the tree (data/example_alloc.json), the gems and item bases all
- * resolve to real poe2db art — so the example renders with genuine images and
- * exercises the exact same decode pipeline as a pasted code.
+ * Everything here is real PoE2 0.5 data — the 95 allocated passive nodes come
+ * straight from the tree (data/example_alloc.json) as one connected sub-graph,
+ * the gems and item bases all resolve to real poe2db art — so the example
+ * renders with genuine images and exercises the same decode pipeline as a
+ * pasted code.
  */
 
 const allocated = (alloc as string[]).join(",");
@@ -223,7 +224,7 @@ function exampleXml(): string {
     </SkillSet>
   </Skills>
   <Tree activeSpec="1">
-    <Spec treeVersion="0_3" classId="0" ascendClassId="1" nodes="${allocated}"/>
+    <Spec treeVersion="0_5" classId="0" ascendClassId="1" nodes="${allocated}"/>
   </Tree>
   <Items activeItemSet="1">
 ${items}
@@ -231,7 +232,7 @@ ${items}
 ${slots}
     </ItemSet>
   </Items>
-  <Notes>Demo build: Lightning Arrow Deadeye. Generated from real PoE2 0.3 tree, gem and item data.</Notes>
+  <Notes>Demo build: Lightning Arrow Deadeye. Generated from real PoE2 0.5 tree, gem and item data.</Notes>
 </PathOfBuilding>`;
 }
 

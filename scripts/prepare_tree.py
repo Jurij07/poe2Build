@@ -3,7 +3,11 @@
 Prepare a slimmed Path of Exile 2 passive-tree file for the web app.
 
 Source of truth: Path of Building Community (PoE2 fork) tree data:
-  https://raw.githubusercontent.com/PathOfBuildingCommunity/PathOfBuilding-PoE2/dev/src/TreeData/0_3/tree.json
+  https://raw.githubusercontent.com/PathOfBuildingCommunity/PathOfBuilding-PoE2/dev/src/TreeData/0_5/tree.json
+
+The tree version must match the live game / Mobalytics, otherwise pasted builds
+(whose node ids are version-specific) render as scattered, disconnected nodes.
+Patch 0.5.x ("Return of the Ancients" / Runes of Aldur) uses TreeData/0_5.
 
 The full tree (~1.4 MB) carries sprite-sheet packing, dds coords and a lot of
 fields we don't need in the browser. This script:
@@ -19,12 +23,15 @@ import math
 import os
 import urllib.request
 
+# Tree data version. Bump this (and TREE_URL) when GGG ships a new tree so the
+# app keeps matching the live game. 0_5 == patch 0.5.x (Runes of Aldur).
+TREE_VERSION = "0_5"
 TREE_URL = (
     "https://raw.githubusercontent.com/PathOfBuildingCommunity/"
-    "PathOfBuilding-PoE2/dev/src/TreeData/0_3/tree.json"
+    f"PathOfBuilding-PoE2/dev/src/TreeData/{TREE_VERSION}/tree.json"
 )
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "data", "_tree_raw.json")
+SRC = os.path.join(ROOT, "data", f"_tree_raw_{TREE_VERSION}.json")
 OUT = os.path.join(ROOT, "data", "poe2tree.json")
 EXAMPLE = os.path.join(ROOT, "data", "example_alloc.json")
 
@@ -121,8 +128,8 @@ def main():
     adj = {k: sorted(v) for k, v in undirected.items()}
 
     slim = {
-        "tree": "poe2-0.3",
-        "source": "PathOfBuilding-PoE2 TreeData/0_3",
+        "tree": f"poe2-{TREE_VERSION.replace('_', '.')}",
+        "source": f"PathOfBuilding-PoE2 TreeData/{TREE_VERSION}",
         "bounds": {"minX": min(xs), "maxX": max(xs), "minY": min(ys), "maxY": max(ys)},
         "classStartNodes": class_start,
         "classes": [
@@ -136,15 +143,18 @@ def main():
     print(f"wrote {OUT} ({os.path.getsize(OUT)/1024/1024:.2f} MB, {len(slim_nodes)} nodes)")
     print("class start nodes:", class_start)
 
-    # ---- Build a realistic connected allocation for the demo (Ranger -> Deadeye) ----
-    start = class_start.get("Ranger")
-    # In PoE2 the class-start nodes sit mid-tree and connect outward in every
-    # direction, so edge-following BFS sprays across the whole tree. A real
-    # allocation is directional, so grow the demo allocation *spatially* from the
-    # start (organic local cluster) with a light bias toward bow/evasion themes.
+    # ---- Build a realistic *edge-connected* allocation for the demo build ----
+    # The renderer highlights an edge only when BOTH endpoints are allocated, so a
+    # spatially-grown (distance-based) allocation looks scattered and disconnected.
+    # A real tree is a single connected sub-graph grown along the edges from the
+    # class start, so do exactly that: greedily extend the allocated frontier to
+    # the adjacent node that best fits the build theme, biasing toward notables and
+    # keeping the cluster compact (distance to the nearest allocated node). This
+    # guarantees connectivity, so it renders as one continuous gold path.
+    start = class_start.get("Ranger")  # Ranger -> Deadeye Lightning Arrow demo
     THEME = (
         "evasion projectile bow dexterity attack speed critical lightning "
-        "life accuracy frenzy charge pierce arrow"
+        "life accuracy frenzy charge pierce arrow damage"
     ).split()
 
     def themed(nid):
@@ -152,41 +162,41 @@ def main():
         text = (n.get("name", "") + " " + " ".join(n.get("stats", []))).lower()
         return any(w in text for w in THEME)
 
-    candidates = [
-        nid
-        for nid, n in slim_nodes.items()
-        if n.get("x") is not None and not n.get("asc") and not n.get("start")
-    ]
-    sx, sy = slim_nodes[start]["x"], slim_nodes[start]["y"]
-    # nearest distance from each candidate to the currently allocated set
-    best = {
-        nid: math.hypot(slim_nodes[nid]["x"] - sx, slim_nodes[nid]["y"] - sy)
-        for nid in candidates
-    }
+    def xy(nid):
+        n = slim_nodes[nid]
+        return n["x"], n["y"]
+
+    def allocatable(nid):
+        n = slim_nodes.get(nid)
+        return bool(n) and n.get("x") is not None and not n.get("asc") and not n.get("start")
+
     order = [start]
     chosen = {start}
-    while len(order) < 95 and best:
-        # pick the candidate closest to the cluster, with bonuses pulling in
-        # notables and on-theme nodes a little sooner
+    chosen_xy = [xy(start)]
+    while len(order) < 95:
+        # candidates = edge-neighbours of the allocated set we could travel to next
+        cands = set()
+        for nid in chosen:
+            for nb in adj.get(nid, ()):
+                if nb not in chosen and allocatable(nb):
+                    cands.add(nb)
+        if not cands:
+            break
+
         def score(nid):
-            d = best[nid]
+            x, y = xy(nid)
+            # compactness: distance to the closest already-allocated node
+            d = min(math.hypot(x - cx, y - cy) for cx, cy in chosen_xy)
             if slim_nodes[nid]["kind"] in ("notable", "keystone"):
-                d -= 220
+                d -= 650
             if themed(nid):
-                d -= 160
+                d -= 380
             return d
 
-        nxt = min(best, key=score)
-        del best[nxt]
-        if nxt in chosen:
-            continue
+        nxt = min(cands, key=score)
         chosen.add(nxt)
+        chosen_xy.append(xy(nxt))
         order.append(nxt)
-        nx, ny = slim_nodes[nxt]["x"], slim_nodes[nxt]["y"]
-        for nid in list(best):
-            d = math.hypot(slim_nodes[nid]["x"] - nx, slim_nodes[nid]["y"] - ny)
-            if d < best[nid]:
-                best[nid] = d
     json.dump(order, open(EXAMPLE, "w"))
     print(f"wrote {EXAMPLE} ({len(order)} allocated nodes, start={start})")
 
